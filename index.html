@@ -344,8 +344,18 @@ footer{padding:28px 32px;background:#0b1c32;color:#c5cdd8;font-size:10px}.footer
   <p style="font-size:12px;color:#697586;line-height:1.6">Isi informasi rumah dan pilih hingga 20 foto sekaligus dari galeri HP. Ukuran file asli maksimal 25 MB per foto; foto hanya dikompres ringan agar detail tetap tajam.</p>
   <div class="admin-property-form">
     <label class="admin-field">Nama / judul rumah<input id="propertyName" type="text" maxlength="100" placeholder="Contoh: Rumah Minimalis Cawas"></label>
-    <label class="admin-field">Harga rumah (Rp)<input id="propertyPrice" type="text" inputmode="numeric" placeholder="Contoh: 450000000"></label>
-    <label class="admin-field">Status properti<select id="propertyStatus"><option value="baru">Tersedia</option><option value="terjual">Terjual</option></select></label>
+    <label class="admin-field">
+  Harga rumah (Rp)
+  <span style="font-weight:400;color:#7b8797">
+    — opsional, boleh dikosongkan
+  </span>
+  <input
+    id="propertyPrice"
+    type="text"
+    inputmode="numeric"
+    placeholder="Kosongkan jika harga belum ingin ditampilkan"
+  >
+    </label>    <label class="admin-field">Status properti<select id="propertyStatus"><option value="baru">Tersedia</option><option value="terjual">Terjual</option></select></label>
     <label class="admin-field">Lokasi / alamat<input id="propertyLocation" type="text" maxlength="180" placeholder="Contoh: Cawas, Klaten"></label>
     <label class="admin-field full">Deskripsi / keterangan rumah<textarea id="propertyDescription" rows="3" placeholder="Jelaskan kondisi rumah, akses jalan, lingkungan, dan informasi penting lainnya"></textarea></label>
     <label class="admin-field">Luas tanah (m²)<input id="propertyLand" type="number" min="0" step="1" placeholder="Contoh: 90"></label>
@@ -812,7 +822,10 @@ footer{padding:28px 32px;background:#0b1c32;color:#c5cdd8;font-size:10px}.footer
       p.status==='terjual'?'SUDAH TERJUAL':'TERSEDIA';
 
     $('detailPropertyName').textContent=p.name||'Properti';
-    $('detailPropertyPrice').textContent=rupiah(p.price);
+    $('detailPropertyPrice').textContent=
+  Number(p.price)>0
+    ?rupiah(p.price)
+    :'Hubungi kami untuk informasi harga';
 
     $('detailPropertyLocation').textContent=
       '⌖ '+(p.location||'Lokasi belum diisi');
@@ -959,8 +972,14 @@ footer{padding:28px 32px;background:#0b1c32;color:#c5cdd8;font-size:10px}.footer
 
   async function renderProperties(){
     const min=digits($('filterMin').value)||0,max=$('filterMax').value.trim()?digits($('filterMax').value):Infinity,loc=$('filterLocation').value.trim().toLowerCase();
-    const fresh=cfg.properties.filter(p=>p.status==='baru'&&Number(p.price)>=min&&Number(p.price)<=max&&String(p.location||'').toLowerCase().includes(loc));
-    const sold=cfg.properties.filter(p=>p.status==='terjual');
+    const fresh=cfg.properties.filter(p=>
+  p.status==='baru' &&
+  (
+    !Number(p.price) ||
+    (Number(p.price)>=min && Number(p.price)<=max)
+  ) &&
+  String(p.location||'').toLowerCase().includes(loc)
+);    const sold=cfg.properties.filter(p=>p.status==='terjual');
     const [freshCards,soldCards]=await Promise.all([Promise.all(fresh.map(card)),Promise.all(sold.map(card))]);
     $('newPropertyGrid').innerHTML=freshCards.length?freshCards.join(''):'<div class="property-empty">Belum ada property yang sesuai dengan filter harga atau lokasi.</div>';
     $('soldPropertyGrid').innerHTML=soldCards.length?soldCards.join(''):'<div class="property-empty">Belum ada data property terjual.</div>';
@@ -1053,14 +1072,35 @@ footer{padding:28px 32px;background:#0b1c32;color:#c5cdd8;font-size:10px}.footer
   });
 
   $('propertySubmitBtn').addEventListener('click',()=>{
-    const name=$('propertyName').value.trim(),price=digits($('propertyPrice').value),location=$('propertyLocation').value.trim();
-    if(!name){alert('Nama rumah wajib diisi.');return;}
-    if(!price){alert('Harga rumah wajib diisi dengan angka lebih dari 0.');return;}
-    if(!location){alert('Lokasi rumah wajib diisi.');return;}
-    if(!propertyPhotos.length){alert('Pilih minimal satu foto rumah.');return;}
-    const previous=editingPropertyIndex>=0?cfg.properties[editingPropertyIndex]:{};
-    const property={...previous,id:previous.id||`property-${Date.now()}`,name,status:$('propertyStatus').value,price,
-      land:Number($('propertyLand').value)||0,building:Number($('propertyBuilding').value)||0,location,
+  const name=$('propertyName').value.trim(),
+        price=digits($('propertyPrice').value),
+        location=$('propertyLocation').value.trim();
+
+  if(!name){
+    alert('Nama rumah wajib diisi.');
+    return;
+  }
+
+  if(!location){
+    alert('Lokasi rumah wajib diisi.');
+    return;
+  }
+
+  if(!propertyPhotos.length){
+    alert('Pilih minimal satu foto rumah.');
+    return;
+  }
+
+  const previous=editingPropertyIndex>=0
+    ?cfg.properties[editingPropertyIndex]
+    :{};
+
+  const property={
+    ...previous,
+    id:previous.id||`property-${Date.now()}`,
+    name,
+    status:$('propertyStatus').value,
+    price:price||0,      land:Number($('propertyLand').value)||0,building:Number($('propertyBuilding').value)||0,location,
       description:$('propertyDescription').value.trim(),bedrooms:Number($('propertyBedrooms').value)||0,
       bathrooms:Number($('propertyBathrooms').value)||0,floors:Number($('propertyFloors').value)||0,
       facilities:$('propertyFacilities').value.trim(),images:propertyPhotos.slice(),image:propertyPhotos[0]};
