@@ -302,31 +302,49 @@ footer{padding:28px 32px;background:#0b1c32;color:#c5cdd8;font-size:10px}.footer
   </section>
 </div>
 <button class="admin-launch" id="adminLaunch" type="button">⚙ Admin</button>
+
 <div class="admin-login-overlay" id="adminLoginOverlay" aria-hidden="true">
-  
-<form class="admin-login-card" id="adminLoginForm">
-  <h2>Login Admin</h2>
-  <p>Masuk menggunakan akun admin Rancang Rumahku.</p>
+  <form class="admin-login-card" id="adminLoginForm">
+    <h2>Login Admin</h2>
+    <p>Masuk menggunakan akun admin Supabase.</p>
 
-  <label for="adminEmailInput">Email Admin</label>
-  <input
-    id="adminEmailInput"
-    type="email"
-    autocomplete="username"
-    required
-  >
+    <label for="adminEmailInput">Email Admin</label>
+    <input
+      id="adminEmailInput"
+      type="email"
+      autocomplete="username"
+      value="habimdaily@gmail.com"
+      required
+    >
 
-  <label for="adminPasswordInput">Password Admin</label>
-  <input
-    id="adminPasswordInput"
-    type="password"
-    autocomplete="current-password"
-    required
-  >
+    <label for="adminPasswordInput">Password Admin</label>
+    <input
+      id="adminPasswordInput"
+      type="password"
+      autocomplete="current-password"
+      required
+    >
 
-  <div class="admin-login-error" id="adminLoginError" role="alert"></div>
-  <button type="submit">MASUK ADMIN</button>
-</form>
+    <div class="admin-login-error" id="adminLoginError" role="alert"></div>
+    <button type="submit">MASUK ADMIN</button>
+    <button type="button" id="adminForgotPassword">LUPA PASSWORD?</button>
+  </form>
+</div>
+
+<div class="admin-login-overlay" id="adminRecoveryOverlay" aria-hidden="true">
+  <form class="admin-login-card" id="adminRecoveryForm">
+    <h2>Buat Password Baru</h2>
+    <p>Masukkan password baru akun admin.</p>
+
+    <label for="recoveryPassword">Password baru</label>
+    <input id="recoveryPassword" type="password" minlength="8" required>
+
+    <label for="recoveryPasswordConfirm">Ulangi password baru</label>
+    <input id="recoveryPasswordConfirm" type="password" minlength="8" required>
+
+    <div class="admin-login-error" id="adminRecoveryError" role="alert"></div>
+    <button type="submit">SIMPAN PASSWORD BARU</button>
+  </form>
 </div>
 <div class="admin-overlay" id="adminOverlay" aria-hidden="true">
   <section class="admin-panel" role="dialog" aria-modal="true" aria-label="Panel admin Rancang Rumahku">
@@ -503,6 +521,82 @@ window.rumahkuSupabase = window.supabase.createClient(
  
   const supabaseClient = window.rumahkuSupabase;
 
+// Tombol lupa password: kirim link pemulihan ke email
+$('adminForgotPassword').addEventListener('click', async () => {
+  const email = $('adminEmailInput').value.trim();
+  const errorBox = $('adminLoginError');
+
+  if (!email) {
+    errorBox.textContent = 'Masukkan email admin terlebih dahulu.';
+    $('adminEmailInput').focus();
+    return;
+  }
+
+  errorBox.textContent = 'Mengirim link pemulihan password...';
+
+  try {
+    const { error } = await supabaseClient.auth.resetPasswordForEmail(email, {
+      redirectTo: window.location.origin + window.location.pathname
+    });
+
+    if (error) throw error;
+
+    errorBox.textContent = 'Link pemulihan sudah dikirim. Silakan cek Gmail.';
+  } catch (error) {
+    errorBox.textContent = error.message || 'Gagal mengirim link pemulihan.';
+  }
+});
+
+// Deteksi saat pengguna membuka link pemulihan dari Gmail
+supabaseClient.auth.onAuthStateChange((event, session) => {
+  if (event === 'PASSWORD_RECOVERY' && session) {
+    $('adminLoginOverlay').classList.remove('open');
+    $('adminLoginOverlay').setAttribute('aria-hidden', 'true');
+
+    $('adminRecoveryOverlay').classList.add('open');
+    $('adminRecoveryOverlay').setAttribute('aria-hidden', 'false');
+  }
+});
+
+// Simpan password baru
+$('adminRecoveryForm').addEventListener('submit', async (e) => {
+  e.preventDefault();
+
+  const password = $('recoveryPassword').value;
+  const confirmation = $('recoveryPasswordConfirm').value;
+  const errorBox = $('adminRecoveryError');
+
+  if (password.length < 8) {
+    errorBox.textContent = 'Password minimal 8 karakter.';
+    return;
+  }
+
+  if (password !== confirmation) {
+    errorBox.textContent = 'Konfirmasi password tidak cocok.';
+    return;
+  }
+
+  errorBox.textContent = 'Menyimpan password baru...';
+
+  try {
+    const { error } = await supabaseClient.auth.updateUser({
+      password: password
+    });
+
+    if (error) throw error;
+
+    $('recoveryPassword').value = '';
+    $('recoveryPasswordConfirm').value = '';
+    $('adminRecoveryOverlay').classList.remove('open');
+    $('adminRecoveryOverlay').setAttribute('aria-hidden', 'true');
+
+    alert('Password berhasil diperbarui. Silakan login menggunakan password baru.');
+    await supabaseClient.auth.signOut();
+  } catch (error) {
+    errorBox.textContent = error.message || 'Gagal memperbarui password.';
+  }
+});
+ 
   let adminAuthorized = false;
 
   function openAdminPanel(){
