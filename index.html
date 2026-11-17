@@ -303,13 +303,30 @@ footer{padding:28px 32px;background:#0b1c32;color:#c5cdd8;font-size:10px}.footer
 </div>
 <button class="admin-launch" id="adminLaunch" type="button">⚙ Admin</button>
 <div class="admin-login-overlay" id="adminLoginOverlay" aria-hidden="true">
-  <form class="admin-login-card" id="adminLoginForm">
-    <h2>Login Admin</h2><p>Masukkan password untuk membuka dashboard Rancang Rumahku.</p>
-    <label for="adminPasswordInput">Password Admin</label>
-    <input id="adminPasswordInput" type="password" autocomplete="current-password" required>
-    <div class="admin-login-error" id="adminLoginError" role="alert"></div>
-    <button type="submit">MASUK ADMIN</button>
-  </form>
+  
+<form class="admin-login-card" id="adminLoginForm">
+  <h2>Login Admin</h2>
+  <p>Masuk menggunakan akun admin Rancang Rumahku.</p>
+
+  <label for="adminEmailInput">Email Admin</label>
+  <input
+    id="adminEmailInput"
+    type="email"
+    autocomplete="username"
+    required
+  >
+
+  <label for="adminPasswordInput">Password Admin</label>
+  <input
+    id="adminPasswordInput"
+    type="password"
+    autocomplete="current-password"
+    required
+  >
+
+  <div class="admin-login-error" id="adminLoginError" role="alert"></div>
+  <button type="submit">MASUK ADMIN</button>
+</form>
 </div>
 <div class="admin-overlay" id="adminOverlay" aria-hidden="true">
   <section class="admin-panel" role="dialog" aria-modal="true" aria-label="Panel admin Rancang Rumahku">
@@ -483,43 +500,118 @@ window.rumahkuSupabase = window.supabase.createClient(
   $('adminOverlay').setAttribute('aria-hidden','true');
   $('adminLoginOverlay').classList.remove('open');
   $('adminLoginOverlay').setAttribute('aria-hidden','true');
-  const adminPasswordKey = 'rancangRumahkuAdminPasswordV1';
-  const defaultAdminPassword = 'RANCANG2027';
-  // Otorisasi hanya berlaku selama panel Admin sedang dibuka.
+ 
+  const supabaseClient = window.rumahkuSupabase;
+
   let adminAuthorized = false;
+
   function openAdminPanel(){
     if (!adminAuthorized) return;
-    fillForm(); $('adminOverlay').classList.add('open'); $('adminOverlay').setAttribute('aria-hidden','false');
+
+    fillForm();
+    $('adminOverlay').classList.add('open');
+    $('adminOverlay').setAttribute('aria-hidden','false');
   }
+
   $('adminLaunch').addEventListener('click', () => {
-    $('adminPasswordInput').value = ''; $('adminLoginError').textContent = '';
-    $('adminLoginOverlay').classList.add('open'); $('adminLoginOverlay').setAttribute('aria-hidden','false');
-    $('adminPasswordInput').focus();
+    $('adminEmailInput').value = '';
+    $('adminPasswordInput').value = '';
+    $('adminLoginError').textContent = '';
+
+    $('adminLoginOverlay').classList.add('open');
+    $('adminLoginOverlay').setAttribute('aria-hidden','false');
+    $('adminEmailInput').focus();
   });
-  $('adminLoginForm').addEventListener('submit', e => {
+
+  $('adminLoginForm').addEventListener('submit', async e => {
     e.preventDefault();
-    let savedPassword = localStorage.getItem(adminPasswordKey) || defaultAdminPassword;
-    if ($('adminPasswordInput').value === savedPassword) {
+
+    const email = $('adminEmailInput').value.trim();
+    const password = $('adminPasswordInput').value;
+
+    const loginError = $('adminLoginError');
+    loginError.textContent = 'Memeriksa akun...';
+
+    try {
+      const { data: authData, error: authError } =
+        await supabaseClient.auth.signInWithPassword({
+          email: email,
+          password: password
+        });
+
+      if (authError) throw authError;
+
+      const userId = authData.user.id;
+      const { data: adminRow, error: adminError } =
+        await supabaseClient
+          .from('site_admins')
+          .select('user_id')
+          .eq('user_id', userId)
+          .maybeSingle();
+
+      if (adminError) throw adminError;
+
+      if (!adminRow) {
+        await supabaseClient.auth.signOut();
+        throw new Error('Akun ini belum terdaftar sebagai admin.');
+      }
+
       adminAuthorized = true;
-      $('adminLoginOverlay').classList.remove('open'); $('adminLoginOverlay').setAttribute('aria-hidden','true');
-      $('adminPasswordInput').value = ''; $('adminLoginError').textContent = ''; openAdminPanel();
-    } else {
-      $('adminLoginError').textContent = 'Password salah. Silakan coba lagi.';
-      $('adminPasswordInput').value = ''; $('adminPasswordInput').focus();
+
+      $('adminLoginOverlay').classList.remove('open');
+      $('adminLoginOverlay').setAttribute('aria-hidden','true');
+
+      $('adminEmailInput').value = '';
+      $('adminPasswordInput').value = '';
+      loginError.textContent = '';
+
+      openAdminPanel();
+
+    } catch (error) {
+      loginError.textContent =
+        error.message || 'Login gagal. Periksa akun Anda.';
+
+      $('adminPasswordInput').value = '';
     }
   });
+
   $('adminLoginOverlay').addEventListener('click', e => {
-    if(e.target === $('adminLoginOverlay')) { $('adminLoginOverlay').classList.remove('open'); $('adminLoginOverlay').setAttribute('aria-hidden','true'); }
+    if (e.target === $('adminLoginOverlay')) {
+      $('adminLoginOverlay').classList.remove('open');
+      $('adminLoginOverlay').setAttribute('aria-hidden','true');
+    }
   });
-  $('changeAdminPassword').addEventListener('click', () => {
+
+  // Ganti password melalui Supabase Auth
+  $('changeAdminPassword').addEventListener('click', async () => {
     const next = $('newAdminPassword').value;
     const confirmNext = $('confirmAdminPassword').value;
-    if(next.length < 8){ alert('Password baru minimal 8 karakter.'); return; }
-    if(next !== confirmNext){ alert('Konfirmasi password tidak cocok.'); return; }
-    localStorage.setItem(adminPasswordKey, next);
-    $('newAdminPassword').value = ''; $('confirmAdminPassword').value = '';
-    alert('Password Admin berhasil diganti di browser ini. Gunakan password baru untuk login berikutnya.');
+
+    if (next.length < 8) {
+      alert('Password baru minimal 8 karakter.');
+      return;
+    }
+
+    if (next !== confirmNext) {
+      alert('Konfirmasi password tidak cocok.');
+      return;
+    }
+
+    const { error } = await supabaseClient.auth.updateUser({
+      password: next
+    });
+
+    if (error) {
+      alert('Gagal mengganti password: ' + error.message);
+      return;
+    }
+
+    $('newAdminPassword').value = '';
+    $('confirmAdminPassword').value = '';
+
+    alert('Password berhasil diperbarui.');
   });
+
   function closePanel(){
     $('adminOverlay').classList.remove('open');
     $('adminOverlay').setAttribute('aria-hidden','true');
