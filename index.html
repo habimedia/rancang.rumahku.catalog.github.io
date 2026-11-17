@@ -745,13 +745,19 @@ footer{padding:28px 32px;background:#0b1c32;color:#c5cdd8;font-size:10px}.footer
 
         <h3>${safe(p.name)}</h3>
 
-        <div class="property-price">${rupiah(p.price)}</div>
+        <div class="property-price">
+  ${Number(p.price)>0
+    ? rupiah(p.price)
+    : 'Hubungi kami untuk informasi harga'}
+</div>
 
         <div class="property-meta">
           ${quickFacts.map(f=>`<span>${f}</span>`).join('')}
         </div>
 
-        <div class="property-location">⌖ ${safe(p.location||'')}</div>
+        <div class="property-location">
+  ⌖ ${safe(p.location||'Lokasi belum dicantumkan')}
+</div>
 
         <div class="property-card-action">
           <span>Lihat detail rumah</span>
@@ -1028,7 +1034,19 @@ footer{padding:28px 32px;background:#0b1c32;color:#c5cdd8;font-size:10px}.footer
   async function renderAdminPropertyList(){
     const rows=await Promise.all(cfg.properties.map(async(p,i)=>{
       const photo=await getPhotoUrl(getPropertyPhotos(p)[0]||'');
-      return `<div class="admin-property-row"><img src="${safe(photo)}" alt=""><div class="admin-property-row-info"><strong>${safe(p.name)}</strong>${safe(p.location||'Lokasi belum diisi')} · ${rupiah(p.price)} · ${p.status==='terjual'?'Terjual':'Tersedia'}</div><div class="admin-property-row-actions"><button type="button" data-edit-index="${i}">Edit</button><button type="button" data-delete-index="${i}">Hapus</button></div></div>`;
+      return `<div class="admin-property-row">
+  <img src="${safe(photo)}" alt="">
+  <div class="admin-property-row-info">
+    <strong>${safe(p.name)}</strong>
+    ${safe(p.location||'Lokasi belum dicantumkan')}
+    · ${Number(p.price)>0?rupiah(p.price):'Harga belum dicantumkan'}
+    · ${p.status==='terjual'?'Terjual':'Tersedia'}
+  </div>
+  <div class="admin-property-row-actions">
+    <button type="button" data-edit-index="${i}">Edit</button>
+    <button type="button" data-delete-index="${i}">Hapus</button>
+  </div>
+</div>`;
     }));
     $('adminPropertyList').innerHTML=rows.length?rows.join(''):'<p style="font:12px Arial;color:#65748a">Belum ada properti.</p>';
     $('adminPropertyList').querySelectorAll('[data-edit-index]').forEach(button=>button.addEventListener('click',()=>editProperty(Number(button.dataset.editIndex))));
@@ -1071,23 +1089,31 @@ footer{padding:28px 32px;background:#0b1c32;color:#c5cdd8;font-size:10px}.footer
     e.target.value='';await renderPhotoPreviews();
   });
 
-  $('propertySubmitBtn').addEventListener('click',()=>{
-  const name=$('propertyName').value.trim(),
-        price=digits($('propertyPrice').value),
-        location=$('propertyLocation').value.trim();
+  
+$('propertySubmitBtn').addEventListener('click',()=>{
+  const name=$('propertyName').value.trim();
+  const description=$('propertyDescription').value.trim();
+  const price=digits($('propertyPrice').value);
+  const location=$('propertyLocation').value.trim();
 
+  // JUDUL WAJIB DIISI
   if(!name){
-    alert('Nama rumah wajib diisi.');
+    alert('Judul rumah wajib diisi.');
+    $('propertyName').focus();
     return;
   }
 
-  if(!location){
-    alert('Lokasi rumah wajib diisi.');
+  // KETERANGAN WAJIB DIISI
+  if(!description){
+    alert('Keterangan rumah wajib diisi.');
+    $('propertyDescription').focus();
     return;
   }
 
+  // MINIMAL SATU FOTO WAJIB ADA
   if(!propertyPhotos.length){
     alert('Pilih minimal satu foto rumah.');
+    $('propertyPhotos').focus();
     return;
   }
 
@@ -1099,15 +1125,34 @@ footer{padding:28px 32px;background:#0b1c32;color:#c5cdd8;font-size:10px}.footer
     ...previous,
     id:previous.id||`property-${Date.now()}`,
     name,
-    status:$('propertyStatus').value,
-    price:price||0,      land:Number($('propertyLand').value)||0,building:Number($('propertyBuilding').value)||0,location,
-      description:$('propertyDescription').value.trim(),bedrooms:Number($('propertyBedrooms').value)||0,
-      bathrooms:Number($('propertyBathrooms').value)||0,floors:Number($('propertyFloors').value)||0,
-      facilities:$('propertyFacilities').value.trim(),images:propertyPhotos.slice(),image:propertyPhotos[0]};
-    const next=cfg.properties.slice();
-    if(editingPropertyIndex>=0)next[editingPropertyIndex]=property;else next.push(property);
-    if(persistProperties(next)){resetPropertyForm();alert('Data properti dan foto tersimpan di browser/perangkat ini. Untuk menampilkannya ke semua pengunjung, lanjutkan integrasi Supabase Storage.');}
-  });
+    description,
+    status:$('propertyStatus').value||'baru',
+    price:price||0,
+    location,
+    land:Number($('propertyLand').value)||0,
+    building:Number($('propertyBuilding').value)||0,
+    bedrooms:Number($('propertyBedrooms').value)||0,
+    bathrooms:Number($('propertyBathrooms').value)||0,
+    floors:Number($('propertyFloors').value)||0,
+    facilities:$('propertyFacilities').value.trim(),
+    images:propertyPhotos.slice(),
+    image:propertyPhotos[0]
+  };
+
+  const next=cfg.properties.slice();
+
+  if(editingPropertyIndex>=0){
+    next[editingPropertyIndex]=property;
+  }else{
+    next.push(property);
+  }
+
+  if(persistProperties(next)){
+    resetPropertyForm();
+    alert('Properti berhasil disimpan di browser/perangkat ini.');
+  }
+});
+
 
   $('propertyCancelBtn').addEventListener('click',resetPropertyForm);
   function calculate(){
@@ -1123,7 +1168,7 @@ footer{padding:28px 32px;background:#0b1c32;color:#c5cdd8;font-size:10px}.footer
   ['filterMin','filterMax','filterLocation'].forEach(id=>$(id).addEventListener('input',renderProperties));
   ['simPrice','simDp'].forEach(id=>bindMoneyInput($(id)));
   ['simPrice','simDp','simRate','simYears'].forEach(id=>$(id).addEventListener('input',calculate));
-    // Isi daftar properti dan pengaturan simulasi saat admin membuka dashboard.
+    
   const adminLaunch=$('adminLaunch');
   adminLaunch.addEventListener('click',()=>{
     $('editSimPrice').value=formatMoney(cfg.simPrice);
@@ -1167,6 +1212,8 @@ footer{padding:28px 32px;background:#0b1c32;color:#c5cdd8;font-size:10px}.footer
   await renderAdminPropertyList();
   setSimulator();
 })();
+ 
+ })();
 </script>
 
 </body>
