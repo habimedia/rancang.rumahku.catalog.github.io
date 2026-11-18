@@ -778,8 +778,52 @@ $('adminRecoveryForm').addEventListener('submit', async (e) => {
     simPrice:500000000,simDp:100000000,simRate:8,simYears:15
   };
   let cfg;
-  try{cfg={...defaults,...JSON.parse(localStorage.getItem(featureKey)||'{}')};}catch(e){cfg={...defaults};}
-  const $=id=>document.getElementById(id);
+
+try{
+  cfg={
+    ...defaults,
+    ...JSON.parse(localStorage.getItem(featureKey)||'{}')
+  };
+}catch(e){
+  cfg={...defaults};
+}
+
+async function loadPropertiesFromSupabase(){
+  const supabaseClient=window.rumahkuSupabase;
+
+  if(!supabaseClient){
+    console.warn('Supabase belum tersedia. Menggunakan data browser.');
+    return;
+  }
+
+  try{
+    const {data,error}=await supabaseClient
+      .from('site_properties')
+      .select('data')
+      .eq('id','main')
+      .maybeSingle();
+
+    if(error) throw error;
+
+    if(data && Array.isArray(data.data)){
+      cfg={
+        ...cfg,
+        properties:data.data
+      };
+
+      localStorage.setItem(featureKey,JSON.stringify(cfg));
+
+      console.log('Data properti berhasil dimuat dari Supabase.');
+    }else{
+      console.log('Data properti belum tersedia di Supabase. Menggunakan data browser.');
+    }
+
+  }catch(error){
+    console.error('Gagal memuat properti dari Supabase:',error);
+    console.warn('Website sementara menggunakan data dari browser.');
+  }
+}
+ const $=id=>document.getElementById(id);
   const digits = value => Number(String(value ?? '').replace(/\D/g, '')) || 0;
   const formatMoney = value => digits(value).toLocaleString('id-ID');
   const rupiah=n=>'Rp '+Math.max(0,Number(n)||0).toLocaleString('id-ID');
@@ -1443,6 +1487,7 @@ $('propertySubmitBtn').addEventListener('click',()=>{
   });
 
   (async()=>{
+  await loadPropertiesFromSupabase();
   await migrateLegacyPhotos();
   await renderProperties();
   await renderAdminPropertyList();
