@@ -1344,17 +1344,84 @@ async function getPhotoUrl(ref){
     await renderPhotoPreviews();$('propertyFormTitle').scrollIntoView({behavior:'smooth',block:'center'});
   }
 
-  function persistProperties(nextProperties){
-    const nextCfg={...cfg,properties:nextProperties};
-    try{localStorage.setItem(featureKey,JSON.stringify(nextCfg));cfg=nextCfg;renderProperties();renderAdminPropertyList();cleanupUnusedPhotos();return true;}
-    catch(error){alert('Data properti belum tersimpan. Penyimpanan data browser penuh atau dibatasi. Foto disimpan terpisah di IndexedDB, tetapi data teks properti tetap membutuhkan ruang browser.');return false;}
+  
+async function persistProperties(nextProperties){
+  const supabaseClient = window.rumahkuSupabase;
+
+  if(!supabaseClient){
+    alert('Koneksi Supabase belum tersedia.');
+    return false;
   }
 
-  function deleteProperty(index){
-    const p=cfg.properties[index];if(!p||!confirm(`Hapus properti "${p.name}"?`))return;
-    const next=cfg.properties.slice();next.splice(index,1);
-    if(persistProperties(next)){if(editingPropertyIndex===index)resetPropertyForm();else if(editingPropertyIndex>index)editingPropertyIndex--;alert('Properti berhasil dihapus dari penyimpanan browser ini.');}
+  const nextCfg = {
+    ...cfg,
+    properties: nextProperties
+  };
+
+  try{
+    const { error } = await supabaseClient
+      .from('site_properties')
+      .upsert({
+        id: 'main',
+        data: nextProperties,
+        updated_at: new Date().toISOString()
+      }, {
+        onConflict: 'id'
+      });
+
+    if(error) throw error;
+
+    cfg = nextCfg;
+
+    try{
+      localStorage.setItem(featureKey, JSON.stringify(nextCfg));
+    }catch(localError){
+      console.warn('Cache browser tidak berhasil diperbarui:', localError);
+    }
+
+    renderProperties();
+    renderAdminPropertyList();
+    cleanupUnusedPhotos();
+
+    return true;
+
+  }catch(error){
+    console.error('Gagal menyimpan properti ke Supabase:', error);
+
+    alert(
+      'Properti gagal disimpan ke Supabase.\n\n' +
+      (error.message || 'Periksa koneksi internet dan izin admin.')
+    );
+
+    return false;
   }
+}
+
+
+  
+async function deleteProperty(index){
+  const p = cfg.properties[index];
+
+  if(!p || !confirm(`Hapus properti "${p.name}"?`)){
+    return;
+  }
+
+  const next = cfg.properties.slice();
+  next.splice(index, 1);
+
+  const saved = await persistProperties(next);
+
+  if(saved){
+    if(editingPropertyIndex === index){
+      resetPropertyForm();
+    }else if(editingPropertyIndex > index){
+      editingPropertyIndex--;
+    }
+
+    alert('Properti berhasil dihapus dari Supabase.');
+  }
+}
+
 
   $('propertyPhotos').addEventListener('change',async e=>{
     const files=Array.from(e.target.files||[]);if(!files.length)return;
@@ -1370,69 +1437,70 @@ async function getPhotoUrl(ref){
   });
 
   
-$('propertySubmitBtn').addEventListener('click',()=>{
-  const name=$('propertyName').value.trim();
-  const description=$('propertyDescription').value.trim();
-  const price=digits($('propertyPrice').value);
-  const location=$('propertyLocation').value.trim();
 
-  // JUDUL WAJIB DIISI
+$('propertySubmitBtn').addEventListener('click', async()=>{
+
+  const name = $('propertyName').value.trim();
+  const description = $('propertyDescription').value.trim();
+  const price = digits($('propertyPrice').value);
+  const location = $('propertyLocation').value.trim();
+
   if(!name){
     alert('Judul rumah wajib diisi.');
     $('propertyName').focus();
     return;
   }
 
-  // KETERANGAN WAJIB DIISI
   if(!description){
     alert('Keterangan rumah wajib diisi.');
     $('propertyDescription').focus();
     return;
   }
 
-  // MINIMAL SATU FOTO WAJIB ADA
   if(!propertyPhotos.length){
     alert('Pilih minimal satu foto rumah.');
     $('propertyPhotos').focus();
     return;
   }
 
-  const previous=editingPropertyIndex>=0
-    ?cfg.properties[editingPropertyIndex]
-    :{};
+  const previous = editingPropertyIndex >= 0
+    ? cfg.properties[editingPropertyIndex]
+    : {};
 
-  const property={
+  const property = {
     ...previous,
-    id:previous.id||`property-${Date.now()}`,
+    id: previous.id || `property-${Date.now()}`,
     name,
     description,
-    status:$('propertyStatus').value||'baru',
-    price:price||0,
+    status: $('propertyStatus').value || 'baru',
+    price: price || 0,
     location,
-    land:Number($('propertyLand').value)||0,
-    building:Number($('propertyBuilding').value)||0,
-    bedrooms:Number($('propertyBedrooms').value)||0,
-    bathrooms:Number($('propertyBathrooms').value)||0,
-    floors:Number($('propertyFloors').value)||0,
-    facilities:$('propertyFacilities').value.trim(),
-    images:propertyPhotos.slice(),
-    image:propertyPhotos[0]
+    land: Number($('propertyLand').value) || 0,
+    building: Number($('propertyBuilding').value) || 0,
+    bedrooms: Number($('propertyBedrooms').value) || 0,
+    bathrooms: Number($('propertyBathrooms').value) || 0,
+    floors: Number($('propertyFloors').value) || 0,
+    facilities: $('propertyFacilities').value.trim(),
+    images: propertyPhotos.slice(),
+    image: propertyPhotos[0]
   };
 
-  const next=cfg.properties.slice();
+  const next = cfg.properties.slice();
 
-  if(editingPropertyIndex>=0){
-    next[editingPropertyIndex]=property;
+  if(editingPropertyIndex >= 0){
+    next[editingPropertyIndex] = property;
   }else{
     next.push(property);
   }
 
-  if(persistProperties(next)){
-    resetPropertyForm();
-    alert('Properti berhasil disimpan di browser/perangkat ini.');
-  }
-});
+  const saved = await persistProperties(next);
 
+  if(saved){
+    resetPropertyForm();
+    alert('Properti berhasil disimpan ke Supabase dan dapat dimuat dari perangkat lain.');
+  }
+
+});
 
   $('propertyCancelBtn').addEventListener('click',resetPropertyForm);
   function calculate(){
