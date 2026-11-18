@@ -401,8 +401,8 @@ footer{padding:28px 32px;background:#0b1c32;color:#c5cdd8;font-size:10px}.footer
     <label class="admin-field full">Fasilitas / informasi tambahan<textarea id="propertyFacilities" rows="2" placeholder="Contoh: Carport, listrik 1.300 watt, air sumur, dekat sekolah"></textarea></label>
     <div class="full">
       <label class="admin-field">Foto rumah (maksimal 20 foto)<input id="propertyPhotos" type="file" accept="image/*" multiple></label>
-      <p class="admin-photo-help">Pilih hingga 20 foto sekaligus (maksimal 25 MB per foto). Foto pertama menjadi foto utama. Kamu bisa menghapus foto dari pratinjau sebelum menyimpan. Foto disimpan di penyimpanan browser (IndexedDB), bukan diperkecil menjadi thumbnail.</p>
-      <div id="propertyPhotoPreview" class="photo-preview-grid"></div>
+      <p class="admin-photo-help">Pilih hingga 20 foto sekaligus (maksimal 25 MB per foto). Foto pertama menjadi foto utama. Kamu bisa menghapus foto dari pratinjau sebelum menyimpan. Foto akan diunggah ke Supabase Storage bucket "property-photos" agar dapat dilihat dari perangkat lain.</p>
+     <div id="propertyPhotoPreview" class="photo-preview-grid"></div>
     </div>
     <div class="full admin-property-form-actions">
       <button class="admin-save" id="propertySubmitBtn" type="button">Simpan properti</button>
